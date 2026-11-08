@@ -1,0 +1,35 @@
+name: Synthetic native review fixture
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+  pull-requests: write
+jobs:
+  synthetic-fixture:
+    if: github.repository == 'cgduzan/nexus-stack-37-contract'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Create bot-authored synthetic native stack
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = cgduzan/nexus-stack-37-contract
+          r="$GITHUB_REPOSITORY"
+          key="bot-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          base=main
+          tip=$(gh api "repos/$r/git/ref/heads/main" --jq .object.sha)
+          prs=()
+          for layer in 1 2; do
+            head="$key-$layer"
+            gh api --method POST "repos/$r/git/refs" -f ref="refs/heads/$head" -f sha="$tip" >/dev/null
+            content=$(printf 'synthetic bot layer %s\n' "$layer" | base64 -w0)
+            tip=$(gh api --method PUT "repos/$r/contents/$head.txt" -f message="synthetic bot layer $layer" -f content="$content" -f branch="$head" --jq .commit.sha)
+            pr=$(gh api --method POST "repos/$r/pulls" -f title="contract $head" -f head="$head" -f base="$base" -f body='Synthetic bot-authored approval-retention fixture for Nexus issue 37.' --jq .number)
+            prs+=("$pr")
+            base="$head"
+          done
+          stack=$(gh api --method POST "repos/$r/stacks" -F "pull_requests[]=${prs[0]}" -F "pull_requests[]=${prs[1]}" --jq .number)
+          jq -n --arg key "$key" --argjson parent "${prs[0]}" --argjson child "${prs[1]}" --argjson stack "$stack" '{key:$key,parent:$parent,child:$child,stack:$stack}' | tee fixture.json
+          cat fixture.json >> "$GITHUB_STEP_SUMMARY"
