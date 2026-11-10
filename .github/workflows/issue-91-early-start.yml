@@ -1,0 +1,13 @@
+name: Issue 91 early start required check
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
+permissions:
+  contents: read
+jobs:
+  required:
+    name: ${{ github.event.pull_request.draft && 'early-start-required (draft)' || 'early-start-required' }}
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo 'Synthetic required-check fixture for issue 91'
